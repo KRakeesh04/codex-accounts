@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codex-accounts-e2e-backend"
+version = "0.0.0"
+requires-python = ">=3.11"
+description = "Offline fake Codex backend for isolated E2E tests; never publish"
+
+[project.scripts]
+codex = "fake_codex:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fake_codex"]
