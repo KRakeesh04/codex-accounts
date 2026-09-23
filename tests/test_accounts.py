@@ -505,6 +505,85 @@ class AccountsTests(unittest.TestCase):
         self.assertEqual((self.original / "auth.json").read_bytes(), before)
         self.invoke("add", "account", "--home", str(self.original), code=2)
 
+    def test_import_current_login_without_copy_refresh_or_login(self):
+        before = (self.original / "auth.json").read_bytes()
+        self.invoke("import", "account")
+        self.assertEqual(
+            self.record("original@example.com")[1]["home"], str(self.original)
+        )
+        self.assertIsNone(self.state()["selected"])
+        self.assertEqual((self.original / "auth.json").read_bytes(), before)
+        self.assertFalse((self.registry / "homes").exists())
+        launches = [event for event in self.events() if "args" in event]
+        self.assertEqual([event["args"] for event in launches], [["app-server"]])
+        requests = [event["rpc"] for event in self.events() if "rpc" in event]
+        identity = next(
+            request for request in requests if request["method"] == "account/read"
+        )
+        self.assertEqual(identity["params"], {"refreshToken": False})
+        self.assertNotIn("secret-token", (self.registry / "accounts.json").read_text())
+
+    def test_import_explicit_home_overrides_environment(self):
+        self.invoke(
+            "import",
+            "account",
+            "--home",
+            str(self.original),
+            env={**self.env, "CODEX_HOME": str(self.root / "missing")},
+        )
+        self.assertEqual(
+            self.record("original@example.com")[1]["home"], str(self.original)
+        )
+
+    def test_import_preserves_existing_selection(self):
+        self.add()
+        self.invoke("select", "account", "alice@example.com", "--no-run")
+        selected = self.state()["selected"]
+        self.invoke("import", "account")
+        self.assertEqual(self.state()["selected"], selected)
+        self.assertEqual(len(self.state()["accounts"]), 2)
+
+    def test_import_rejects_duplicate_home_alias(self):
+        self.invoke("import", "account")
+        before = (self.registry / "accounts.json").read_bytes()
+        alias = self.root / "home-alias"
+        alias.symlink_to(self.original, target_is_directory=True)
+        result = self.invoke("import", "account", "--home", str(alias), code=2)
+        self.assertIn("already in the account list", result.stderr)
+        self.assertEqual((self.registry / "accounts.json").read_bytes(), before)
+
+    def test_import_missing_or_empty_home_never_logs_in(self):
+        for home in (str(self.root / "missing"), ""):
+            with self.subTest(home=home):
+                self.invoke("import", "account", "--home", home, code=2)
+        self.assertFalse(self.events())
+        self.assertFalse((self.registry / "accounts.json").exists())
+
+    def test_import_signed_out_home_never_logs_in_or_registers(self):
+        (self.original / "auth.json").unlink()
+        result = self.invoke("import", "account", code=2)
+        self.assertIn("no saved login", result.stderr)
+        self.assertFalse((self.registry / "accounts.json").exists())
+        self.assertNotIn(["login"], [event.get("args") for event in self.events()])
+
+    def test_import_metadata_failure_preserves_registry_and_credentials(self):
+        self.add()
+        registry = (self.registry / "accounts.json").read_bytes()
+        credentials = (self.original / "auth.json").read_bytes()
+        result = self.invoke(
+            "import",
+            "account",
+            code=2,
+            env={**self.env, "TEST_METADATA_ERROR": "1"},
+        )
+        self.assertIn("Could not verify", result.stderr)
+        self.assertNotIn("secret-token", result.stdout + result.stderr)
+        self.assertEqual((self.registry / "accounts.json").read_bytes(), registry)
+        self.assertEqual((self.original / "auth.json").read_bytes(), credentials)
+        self.assertEqual(
+            [event.get("args") for event in self.events()].count(["login"]), 1
+        )
+
     def test_v1_migration_discards_labels_and_keeps_home_and_selection(self):
         self.registry.mkdir()
         old = {

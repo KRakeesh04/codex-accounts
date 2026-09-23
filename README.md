@@ -89,6 +89,35 @@ and refreshes its displayed email.
 To recover an already signed-in home, `codex add account --home /path/to/home`
 discovers its email without copying credentials or starting another sign-in.
 
+### Import your current login without signing in again
+
+If the official Codex CLI is already signed in, register that login with:
+
+```bash
+codex import account
+```
+
+This uses `CODEX_HOME` when set, otherwise `~/.codex`. To import a different
+existing home, use `codex import account --home /path/to/home`. The
+`codex-accounts import account` spelling works too. Emails and plans are
+discovered automatically; no label, browser OAuth, or `codex login` is required.
+
+Import verifies the saved identity through the same metadata API as
+`add account --home`, without requesting a token refresh. It does not read or
+copy raw credentials, create a credential snapshot, change your selected
+account, or launch a conversation. Duplicate homes, missing homes, signed-out
+homes, and failed identity lookups are rejected rather than starting a login.
+
+The original home remains the credential source, including its existing
+credential backend. Logging out or replacing its login also affects this
+registered account; this is not an independent backup of the current session.
+Normal shared-data migration still applies when importing: settings and history
+join the shared store. Close running chats before importing an unmigrated home.
+Only import homes you trust.
+
+After import, select the discovered email with `codex select account EMAIL`, or
+use `codex select account EMAIL --no-run` to select without launching Codex.
+
 ## Installation
 
 This is a companion to the official Codex CLI. It does not include the Codex
