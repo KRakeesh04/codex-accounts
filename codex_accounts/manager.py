@@ -217,6 +217,17 @@ def add_account(
         return 0
 
 
+def import_account(store: Store, *, home: str | None = None) -> int:
+    source = (
+        home
+        if home is not None
+        else os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
+    )
+    if not source:
+        raise AccountError("--home requires a nonempty path to an existing Codex home.")
+    return add_account(store, existing_home=source)
+
+
 def list_accounts(store: Store, *, as_json: bool = False, force: bool = False) -> None:
     state = refresh(store, force=force)
     rows = store.rows(state)

@@ -6,7 +6,14 @@ import shlex
 import subprocess
 import sys
 
-from .manager import add_account, list_accounts, refresh, remove_account, select_account
+from .manager import (
+    add_account,
+    import_account,
+    list_accounts,
+    refresh,
+    remove_account,
+    select_account,
+)
 from .native import account_environment, codex_binary, launch
 from .shared import prepare_home
 from .state import AccountError, Store, default_root
@@ -14,6 +21,7 @@ from .state import AccountError, Store, default_root
 ACCOUNT_HELP = """
 Account commands:
   codex add account                Sign in and discover the account's email
+  codex import account             Register the current login without signing in
   codex list accounts              List saved email accounts
   codex select account             Choose an account and start Codex
   codex select account EMAIL       Select by email and start Codex
@@ -38,6 +46,11 @@ def parser() -> argparse.ArgumentParser:
     add.add_argument("--device-auth", action="store_true")
     add.add_argument(
         "--home", metavar="PATH", help="Discover an existing login from its Codex home"
+    )
+    importing = commands.add_parser("import", help="Register an already saved login")
+    importing.add_argument("subject", choices=["account"])
+    importing.add_argument(
+        "--home", metavar="PATH", help="Existing Codex home (default: CODEX_HOME or ~/.codex)"
     )
     listing = commands.add_parser("list", help="Show saved email accounts")
     listing.add_argument("subject", choices=["accounts"])
@@ -83,6 +96,8 @@ def manage(store: Store, arguments: list[str]) -> int:
     args = parser().parse_args(arguments)
     if args.command == "add":
         return add_account(store, device_auth=args.device_auth, existing_home=args.home)
+    if args.command == "import":
+        return import_account(store, home=args.home)
     if args.command == "list":
         list_accounts(store, as_json=args.json, force=args.refresh)
         return 0
@@ -153,6 +168,7 @@ def run(arguments: list[str]) -> int:
     store = Store(default_root())
     if arguments and arguments[0] in (
         "add",
+        "import",
         "list",
         "select",
         "current",
